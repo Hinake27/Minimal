@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>色票展示與相似色查找 · 秋色版</title>
+<style>
+  :root{
+    --bg: #FFF8F1;
+    --panel: #FFFFFF;
+    --ink: #1F2937;
+    --muted: #6B7280;
+    --line: #E5E7EB;
+    --amber: #F59E0B;
+    --maple: #B91C1C;
+    --brown: #8B5E34;
+    --accent2: #D97706;
+    --ring: rgba(245, 158, 11, 0.35);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body {
+    margin:0; font-family: ui-sans-serif, -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Roboto, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 10% -10%, #FFF1E6 0%, transparent 60%),
+                radial-gradient(1000px 500px at 110% 0%, #FFE4CC 0%, transparent 60%),
+                var(--bg);
+    color:var(--ink);
+    overflow-x:hidden;
+  }
+  header {
+    position: sticky; top:0; z-index: 20;
+    padding:16px 22px; color:#fff; font-weight:700; letter-spacing:0.5px;
+    background: linear-gradient(120deg, var(--maple), var(--accent2) 45%, var(--amber) 100%);
+    box-shadow: 0 6px 24px rgba(185,28,28,.25);
+  }
+  header .sub {font-weight:500; opacity:.9; font-size:12px; letter-spacing:.2px}
+  .leaves{position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:0;}
+  .leaf{
+    position:absolute; width:18px; height:18px; opacity:.22;
+    animation: fall linear infinite;
+    fill: currentColor; color: var(--maple);
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,.06));
+  }
+  .leaf.alt{color: var(--amber);}
+  .leaf.brown{color: var(--brown);}
+  @keyframes fall{
+    0%{ transform: translate3d(var(--x,0), -10%, 0) rotate(0deg); }
+    100%{ transform: translate3d(calc(var(--x,0) + var(-- drift, 0px)), 110%, 0) rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .leaves{display:none}
+    *{animation:none!important; transition:none!important}
+  }
+  .container {position:relative; z-index:1; display:flex; gap:22px; padding:20px; max-width:1200px; margin:0 auto;}
+  .left, .right {
+    background: var(--panel);
+    border-radius:16px; padding:16px;
+    box-shadow: 0 6px 24px rgba(149, 83, 16, 0.07);
+    border:1px solid rgba(245, 158, 11, 0.08);
+  }
+  .left {flex:2; overflow-y:auto; max-height:calc(100vh - 160px);}
+  .right {flex:1; overflow-y:auto; max-height:calc(100vh - 160px);}
+  .group {margin-bottom:18px;}
+  .group h3 {
+    margin:0 0 12px; font-size:15px; font-weight:700; color:var(--ink);
+    border-bottom:1px dashed var(--line); padding-bottom:6px; position:relative;
+  }
+  .group h3:after{
+    content:""; position:absolute; left:0; bottom:-1px; height:2px; width:86px;
+    background: linear-gradient(90deg, var(--amber), transparent);
+    opacity:.6;
+  }
+  .colors {display:flex; flex-wrap:wrap; gap:12px;}
+  .color-card {width:86px; text-align:center; font-size:12px;}
+  .swatch {
+    width:52px; height:52px; border-radius:14px; margin:0 auto 6px;
+    position:relative; cursor:pointer; border:1px solid #e5e7eb;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .swatch:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 8px 22px rgba(245, 158, 11, .18); }
+  .metal {position:absolute; top:-6px; right:-6px; background:linear-gradient(180deg,#f6e27a,#d1a800);
+    color:#3b2f00; font-size:10px; padding:2px 5px; border-radius:8px; border:1px solid rgba(0,0,0,.08); box-shadow:0 2px 6px rgba(0,0,0,.08);}
+  .hex {font-weight:700;}
+  .rgb {color:var(--muted);}
+  .similar-item {display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid #f1f1f1; border-radius:12px; transition: background .15s ease;}
+  .similar-item:hover{ background: #FFF6E9; }
+  .similar-swatch {width:42px; height:42px; border-radius:12px; border:1px solid #e5e7eb; position:relative;}
+  .toolbar {
+    position:relative; z-index:1; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    padding:14px 20px; background:rgba(255, 247, 237, .85); color:var(--ink);
+    backdrop-filter: blur(6px);
+    border-bottom:1px solid rgba(245, 158, 11, .15);
+  }
+  .input {
+    padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; color:var(--ink);
+    box-shadow: 0 2px 0 rgba(245,158,11,.08) inset;
+    outline:none; transition: box-shadow .15s ease, border-color .15s ease;
+  }
+  .input:focus{ border-color: var(--amber); box-shadow: 0 0 0 4px var(--ring); }
+  .btn {
+    padding:10px 14px; border-radius:12px; border:1px solid rgba(245,158,11,.4);
+    background: linear-gradient(180deg, #FFE8C7, #FFD9A1);
+    color:#7C2D12; font-weight:700; cursor:pointer;
+    box-shadow: 0 6px 14px rgba(245,158,11,.25);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  }
+  .btn:hover{ transform: translateY(-1px); filter:saturate(1.05); }
+  .btn:active{ transform: translateY(0); box-shadow:none; }
+  .tooltip {
+    position:absolute; background:rgba(31,41,55,.96); color:#fff; padding:8px 10px; border-radius:10px;
+    font-size:12px; max-width:260px; z-index:30; display:none; white-space:pre-line; box-shadow: 0 8px 22px rgba(0,0,0,.22);
+    border:1px solid rgba(255,255,255,.06);
+  }
+  .info-card {border:1px solid rgba(245,158,11,.25); border-radius:14px; padding:12px; margin-bottom:14px;
+    background: linear-gradient(180deg, #FFFFFF, #FFF8EE);
+    box-shadow: 0 6px 20px rgba(149, 83, 16, 0.08);
+  }
+  .info-row {display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+  .info-swatch {width:60px; height:60px; border-radius:14px; border:1px solid #e5e7eb; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;}
+  .info-grid {display:grid; grid-template-columns:auto 1fr auto; gap:8px 12px; align-items:center; width:100%;}
+  .tag {display:inline-block; padding:4px 8px; border-radius:999px; background:#FFF1DD; border:1px solid rgba(245,158,11,.35); color:#7C2D12; font-size:12px;}
+  .copy-btn {padding:6px 10px; border:1px solid #F3C97A; border-radius:10px; background:#FFF4DB; cursor:pointer; font-weight:700;}
+  .sec-title {margin:12px 0 8px; font-weight:800; font-size:14px; color:#7C2D12; letter-spacing:.3px;}
+  .match-group {border:1px solid rgba(245,158,11,.25); border-radius:12px; padding:10px; margin:10px 0; background:#FFFBF5;}
+  .match-title {font-weight:800; margin-bottom:8px; color:#7C2D12;}
+  .match-colors {display:flex; flex-wrap:wrap; gap:10px;}
+  .pill {padding:4px 10px; border-radius:999px; background:#FFF1DD; border:1px solid rgba(245,158,11,.35); font-size:12px; margin-left:8px;}
+  @media (max-width: 900px){
+    .container{flex-direction:column}
+    .left, .right{max-height:unset}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>色票展示與相似色查找</div>
+</header>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="leaf" viewBox="0 0 24 24">
+    <path d="M12 2c1.8 2 4.4 3.4 7 3-1 2.5-3.3 4.5-6 5 0 0 1 5-5 10-1-5 2-8 3-9-3 .3-6-1-8-3 3-.6 5.4-2.6 6.3-5 .5.6 1.1 1.2 1.7 1.7z"/>
+  </symbol>
+</defs></svg>
+<div class="leaves" id="leaves"></div>
+
+<div class="toolbar">
+  <input id="colorInput" class="input" type="text" placeholder="輸入 HEX (#FF0000 / FF0000) 或 RGB(255,0,0)" />
+  <button id="searchBtn" class="btn">顏色搜尋</button>
+  <input id="nameInput" class="input" type="text" placeholder="輸入名稱/關鍵字（例：玫瑰、公主、聖誕）" />
+  <button id="nameBtn" class="btn">名稱搜尋</button>
+  <small style="opacity:.8">Enter 也可搜尋</small>
+</div>
+
+<div class="container">
+  <div class="left" id="left"></div>
+  <div class="right" id="right"><em>點左邊色票、或用上方「顏色搜尋 / 名稱搜尋」查結果</em></div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+(function createLeaves(){
+  const host = document.getElementById('leaves');
+  const total = 26;
+  for(let i=0;i<total;i++){
+    const s = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    const use = document.createElementNS('http://www.w3.org/2000/svg','use');
+    s.setAttribute('class','leaf'+(i%3===0?' alt':(i%5===0?' brown':'')));
+    s.setAttribute('viewBox','0 0 24 24');
+    use.setAttributeNS('http://www.w3.org/1999/xlink','href','#leaf');
+    s.appendChild(use);
+    const x = Math.random()*100;
+    const dur = 10 + Math.random()*12;
+    const delay = -Math.random()*dur;
+    const drift = (Math.random()>.5?1:-1)*(20+Math.random()*60);
+    s.style.left = x+'vw';
+    s.style.top = (-10 + Math.random()*20)+'vh';
+    s.style.animationDuration = dur+'s';
+    s.style.animationDelay = delay+'s';
+    s.style.setProperty('--x', x+'vw');
+    s.style.setProperty('--drift', drift+'px');
+    host.appendChild(s);
+  }
+})();
+
+document.getElementById("searchBtn").addEventListener("click", searchColor);
+document.getElementById("colorInput").addEventListener("keydown", function(e){
+  if(e.key === "Enter") searchColor();
+});
+document.getElementById("nameBtn").addEventListener("click", searchByName);
+document.getElementById("nameInput").addEventListener("keydown", function(e){
+  if(e.key === "Enter") searchByName();
+});
+
+function toHex(n){ return n.toString(16).padStart(2, "0"); }
+function hexToRgbArr(hex){ const num = parseInt(hex.replace("#",""), 16); return [(num>>16)&255, (num>>8)&255, num&255]; }
+function hexToRgb(hex) { const [r,g,b] = hexToRgbArr(hex); return `${r}, ${g}, ${b}`; }
+function rgbToHsl(r,g,b){
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  let h,s,l=(max+min)/2;
+  if(max===min){ h=s=0; }
+  else{
+    const d=max-min;
+    s = l>0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max){
+      case r: h=(g-b)/d + (g<b?6:0); break;
+      case g: h=(b-r)/d + 2; break;
+      case b: h=(r-g)/d + 4; break;
+    }
+    h*=60;
+  }
+  return [Math.round(h), Math.round(s*100), Math.round(l*100)];
+}
+function relLum(r,g,b){
+  const sr=[r,g,b].map(v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); });
+  return 0.2126*sr[0]+0.7152*sr[1]+0.0722*sr[2];
+}
+function idealTextColor(hex){
+  const [r,g,b]=hexToRgbArr(hex);
+  return relLum(r,g,b) > 0.35 ? "#000000" : "#FFFFFF";
+}
+function colorDistance(hex1, hex2) {
+  const [r1, g1, b1] = hexToRgbArr(hex1);
+  const [r2, g2, b2] = hexToRgbArr(hex2);
+  return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
+}
+
+const groups = [];
+const DEMO_TEXT = `梅林指定染色劑組合	#DBE3E3	#3F97AF	#020715	#1A3855	#FFFFCC
+DIVA指定染色劑組合#DFD6D2	#162B1E	#F19292	#35292A	#009425
+教授J指定染色劑組合#39131A	#494949	#DCBF97	#FFFFFF	#282828
+總鋪師指定染色劑組合#DFD6D2	#4B2D23	#347691	#35292A	#FFFFFF
+寶藏獵人指定染色劑組合#EDEAE3	#B37045	#4A2F29	#1E1E20	#FFB330
+下午茶指定染色劑組合#E8D2CA	#AA2020	#952020	#DDA864	#191B28	#851818	#75787B	#EEB07F
+冬季染色劑組合#AB1414	#1B1919	#F4EBE7	#6C4D32	#141618	#AF2A24	#F1F5F7	#F2EDF3	#E5E5E5	#8D1C1C	#506850	#1B76D8
+宇宙染色劑組合	#5C1DB5	#4D0078	#C7C4FF	#BF8803	#00000C	#B677E1	#DB9CFF	#FFE8FF	#FFFFFF
+休閒約會服裝染色劑組合#F2EEE7	#121845	#3B77AC	#9B2424	#3F211F
+浪漫玫瑰禮服染色劑組合#CC1E25	#424242	#876F3C	金屬染#876F3C 金屬染#424242
+玫瑰護衛隊制服染色劑組合#1D3264	#1E1E1E	#FFFFFF	#FF0000	#938260
+玫瑰護衛隊武器染色劑組合#BA9E3F	#121111	#D30505	金屬染#BA9E3F 金屬染#121111
+亞特指定染色劑組合#28536B	#B0430F	#41281D	#808080	#182258
+艾薇琳指定染色劑組合#100E0E	#FFFFFF	#50C2C5	#7E4D48	#694F1E
+托爾維斯指定染色劑組合#E7BF81	#FFFFFF	#540404	#3B3947	#5D4524
+畢奈指定染色劑組合#EFEDDD	#C8DE4B	#A29696	#544B4B	#D6A874
+卡茲遠指定染色劑組合#39131A	#21304D	#3D2A23	#E5A83F	#EFEFEF
+艾亞莉服裝染色劑組合#2D1F36	#283558	#301E45	#8C0CC5	#D3AF92
+女性決鬥者服裝染色劑組合#F6CE1C	#D5D1CD	#55AEBC	#252525	#181717
+男性決鬥者服裝染色劑組合#FFD237	#E5EAEE	#9E9E9E	#55AEBC	#22252C
+華麗半神服裝染色劑組合#241E1D	#EBE2E3	#241E1D	#EBE2E3	#BB8157
+邱比特染色劑組合 #E2427E #C31653 #F992B9	#FFAAAA	#FAB350	金屬染#E2427E	金屬染#C31653	金屬染#F992B9	金屬染#FFAAAA	金屬染#FAB350
+大遊行樂團服飾染色劑組合包	#7D1530	#AAABCB	#262323	#6E4936	#DC9C34	金屬染#7D1530	金屬染#AAABCB	金屬染#262323	金屬染#6E4936	金屬染#DC9C34
+鬱金香大遊行王子服裝染色劑組合包	#662B57	#0E2653	#DBD2C8	#861016	#BB8F3D	#DFDDD5	#1F293C	#2A3A2F	#FF878D	金屬染#FF878D
+鬱金香大遊行公主服裝染色劑組合包	#9F221F	#253A84	#D9D6C8	#9A7ABA	#C8984E	#EDE7E0	#101666	#910808	#DDD7D0	#FF878D
+皮魯安指定染色劑組合	#717A0E	#7C2004	#E0931C	#B97437	#200C06
+摩勒愛德指定染色劑組合	#215575	#790B0B	#347B8F	#86879D	#EAEDF2
+貝仁指定染色劑組合	#3A3333	#981010	#C99150	#261A1A	#171426
+克赫蓮指定染色劑組合	#1E1E1E	#6C46B3	#B4B4B4	#817A72	#8751B0
+尊爵不凡的神服裝染色劑組合包	#494960	#565269	#947E4C	#D6A680	#EBE2CE	#1FBEE3	#F9EBDA	#D5A66B	#2A3A2F	金屬染#7F7F9B
+惡魔服裝染色劑組合#C61400	#C61400	#231F1F	#292929	#3C303A	#A5A5BB	#E7E7E7	#3C303A	#C01D15	金屬染#A87A2C
+月光影子服裝染色劑組合	#4F1D6C	#100707	#063947	#110105	#610928	#C27F22	#1B5438	#190D0B	#0A576C	#43215A	#E0C8C0	#442B55
+月光影子服裝金屬染色劑組合包	#4F1D6C	#100707	#063947	#110105	#610928	#C27F22	#1B5438	#190D0B	#0A576C	#43215A	#E0C8C0	#442B55
+聖誕武器	#C10303	#B80C03	#207670	#17896E	#B3C4E5	#E9E1D8	金屬染#F60100 金屬染#D93232 金屬染#DAA758 金屬染#F0C155 金屬染#FFBD41 金屬染#9AB4E0 金屬染#188379 金屬染#226861
+男性冬季小精靈服裝染色劑組合包 #A87F65 #A87F66 #EBD19D #E6D0AC #E6D0AC #DEB666 #225C34 #225C34 #225C34 #B20D0D #B20D0D #B20D0D #0C0B12 #0C0B12 #173236 #B36B6B #0C0B12 金屬染#E6D0AC
+女性冬季小精靈服裝染色劑組合包 #A87F65	#A87F66	#EBD19D	#E6D0AC	#E6D0AC	#DEB666	#225C34	#225C34	#225C34	#B20D0D	#B20D0D	#B20D0D	#0C0B12	#0C0B12	#0C0B12 #0C0B12	#0C0B12	#173236	#173236	#B36B6B 金屬染#E6D0AC
+聖戰士服裝染色劑組合	#D4CFDC	#E2A912	#1B1518	#C11313	#DEDBE3	金屬染#D4CFDC	金屬染#E2A912	金屬染#1B1518	金屬染#C11313	金屬染#DEDBE3
+水之精靈服裝染色劑組合	#DED4DC	#55515A	#1E1E1E	#5D466F	#CF9F61	金屬染#DED4DC	金屬染#55515A	金屬染#1E1E1E	金屬染#5D466F	金屬染#CF9F61
+幽冥使者服裝染色劑組合	#2F2F36	#40404B	#262329	#C9C6C1	#C0B9B2	#24272B	#70D967	#5F5D6A	#AAA5A2
+魔法戰隊服裝染色劑組合	#283362	#6CD3E8	#E88EB6	#B08A6E	#592173	#252627	#FFCC66	#62DAE0	#21453B	#144B4D	#C61400	#F7C8A0
+渡鴉之神服裝染色劑組合	#20202E	#0D0D0E	#1F1F21	#2F2C2C	#232328	#1A1A1B	#151516	#A59392	#A18568	#ECEAEE	#CBCED5	#0C0893	#2625A2
+暗黑主教服裝染色劑組合	#900000	#1E1E1E	#383838	#18181A	#74634A	#9D0B1E	#891717	#F0F0F0	#937E61	#AB925E	#6A675B	#CEA56D	#EDBDA6
+洛維林指定染色劑組合	#271522	#293B57	#A01727	#D8C1E0	#DADADA
+埃坦指定染色劑組合	#67DBE1	#7BBCE0	#E7D7BA	#DADDE4	#12295B
+記憶花之劍	#C5AB6F	#47CE49	#1396E5	#E6E223
+古典貴族染色劑組合	#0B0B0C	#1B1C31	#202143	#E2E1EE	#64192A	#E3E2E2	#A7947B	#1F070C	#AA9A86	#AB9170	#5E162D	#F1BDA6	#A19475`;
+DEMO_TEXT.split("\n").forEach(line => {
+  if (!line.trim()) return;
+  const nameMatch = line.match(/^[^\t#]+/);
+  const name = nameMatch ? nameMatch[0].trim() : "未命名";
+  const colors = [];
+  line.split(/\s+/).forEach(token => {
+    const m = token.match(/(金屬染)?#([0-9A-Fa-f]{6})/);
+    if (m) colors.push({hex: "#" + m[2].toUpperCase(), metal: !!m[1], name});
+  });
+  groups.push({name, colors});
+});
+
+const leftDiv = document.getElementById("left");
+groups.forEach(g => {
+  const groupDiv = document.createElement("div");
+  groupDiv.className = "group";
+  const title = document.createElement("h3");
+  title.textContent = g.name;
+  groupDiv.appendChild(title);
+  const colorWrap = document.createElement("div");
+  colorWrap.className = "colors";
+  g.colors.forEach(c => {
+    const card = document.createElement("div");
+    card.className = "color-card";
+    const swatch = document.createElement("div");
+    swatch.className = "swatch";
+    swatch.style.background = c.hex;
+    if (c.metal) {
+      const metalTag = document.createElement("div");
+      metalTag.className = "metal";
+      metalTag.textContent = "金屬";
+      swatch.appendChild(metalTag);
+    }
+    swatch.addEventListener("click", () => showSimilar(c.hex));
+    swatch.addEventListener("mousemove", e => showTooltip(e, `${c.name}\n${c.hex}\nRGB(${hexToRgb(c.hex)})`));
+    swatch.addEventListener("mouseleave", hideTooltip);
+    card.appendChild(swatch);
+    const hexP = document.createElement("div");
+    hexP.className = "hex";
+    hexP.textContent = c.hex;
+    const rgbP = document.createElement("div");
+    rgbP.className = "rgb";
+    rgbP.textContent = `RGB(${hexToRgb(c.hex)})`;
+    card.appendChild(hexP);
+    card.appendChild(rgbP);
+    colorWrap.appendChild(card);
+  });
+  groupDiv.appendChild(colorWrap);
+  leftDiv.appendChild(groupDiv);
+});
+
+function findExactMatches(hex){
+  const found = [];
+  groups.forEach(g => {
+    g.colors.forEach(c => {
+      if (c.hex.toUpperCase() === hex.toUpperCase()) {
+        found.push({group: g.name, metal: c.metal});
+      }
+    });
+  });
+  return found;
+}
+
+function showSimilar(hex) {
+  const allColors = groups.flatMap(g => g.colors);
+  const sorted = allColors
+    .map(c => ({...c, dist: colorDistance(hex, c.hex)}))
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 20);
+  const rightDiv = document.getElementById("right");
+  rightDiv.innerHTML = "";
+
+  renderInputInfo(rightDiv, hex);
+
+  const secTitle = document.createElement("div");
+  secTitle.className = "sec-title";
+  secTitle.textContent = "相近色 Top 20";
+  rightDiv.appendChild(secTitle);
+
+  sorted.forEach(c => {
+    const item = document.createElement("div");
+    item.className = "similar-item";
+    const sw = document.createElement("div");
+    sw.className = "similar-swatch";
+    sw.style.background = c.hex;
+    if (c.metal) {
+      const metalTag = document.createElement("div");
+      metalTag.className = "metal";
+      metalTag.textContent = "金屬";
+      sw.appendChild(metalTag);
+    }
+    sw.addEventListener("mousemove", e => showTooltip(e, `${c.name}\n${c.hex}\nRGB(${hexToRgb(c.hex)})`));
+    sw.addEventListener("mouseleave", hideTooltip);
+    sw.addEventListener("click", ()=> showSimilar(c.hex));
+    item.appendChild(sw);
+    const text = document.createElement("div");
+    text.innerHTML = `<strong>${c.hex}</strong><br>RGB(${hexToRgb(c.hex)})<br>${c.name}`;
+    item.appendChild(text);
+    rightDiv.appendChild(item);
+  });
+}
+
+function renderInputInfo(container, hex){
+  const [r,g,b]=hexToRgbArr(hex);
+  const [h,s,l]=rgbToHsl(r,g,b);
+  const textColor = idealTextColor(hex);
+  const matches = findExactMatches(hex);
+
+  const card = document.createElement("div");
+  card.className = "info-card";
+
+  const row = document.createElement("div");
+  row.className = "info-row";
+
+  const sw = document.createElement("div");
+  sw.className = "info-swatch";
+  sw.style.background = hex;
+  sw.style.color = textColor;
+  sw.textContent = "預覽";
+
+  const info = document.createElement("div");
+  info.style.flex = "1";
+
+  const grid = document.createElement("div");
+  grid.className = "info-grid";
+  grid.innerHTML = `
+    <div>HEX</div><div><code id="hexVal">${hex.toUpperCase()}</code></div><button class="copy-btn" data-copy="hexVal">複製</button>
+    <div>RGB</div><div><code id="rgbVal">RGB(${r}, ${g}, ${b})</code></div><button class="copy-btn" data-copy="rgbVal">複製</button>
+    <div>HSL</div><div><code id="hslVal">HSL(${h}°, ${s}%, ${l}%)</code></div><button class="copy-btn" data-copy="hslVal">複製</button>
+  `;
+
+  const meta = document.createElement("div");
+  meta.style.marginTop = "8px";
+  if(matches.length){
+    const tags = matches.map(m=>`<span class="tag">${m.group}${m.metal ? "・金屬" : ""}</span>`).join(" ");
+    meta.innerHTML = `<div class="sec-title" style="margin:8px 0 4px">資料庫中完全相同的來源</div>${tags}`;
+  }else{
+    meta.innerHTML = `<div class="sec-title" style="margin:8px 0 4px">資料庫中完全相同的來源</div><span class="tag">沒有完全相同紀錄</span>`;
+  }
+
+  info.appendChild(grid);
+  info.appendChild(meta);
+  row.appendChild(sw);
+  row.appendChild(info);
+  card.appendChild(row);
+  container.appendChild(card);
+
+  card.addEventListener("click", (e)=>{
+    const btn = e.target.closest(".copy-btn");
+    if(!btn) return;
+    const id = btn.getAttribute("data-copy");
+    const txt = card.querySelector("#"+id).textContent;
+    navigator.clipboard.writeText(txt).then(()=>{
+      btn.textContent = "已複製";
+      setTimeout(()=>btn.textContent="複製", 1200);
+    });
+  });
+}
+
+function searchByName(){
+  const kwRaw = document.getElementById("nameInput").value.trim();
+  if(!kwRaw){ alert("請輸入關鍵字（例如：玫瑰、公主、聖誕）"); return; }
+  const kw = kwRaw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(kw, "i");
+  const rightDiv = document.getElementById("right");
+  rightDiv.innerHTML = "";
+
+  const matchedGroups = groups.filter(g => re.test(g.name));
+  const colorCount = matchedGroups.reduce((sum,g)=>sum+g.colors.length,0);
+
+  const header = document.createElement("div");
+  header.className = "sec-title";
+  header.innerHTML = `名稱搜尋「<strong>${kwRaw}</strong>」結果：<span class="pill">組合包 ${matchedGroups.length}</span><span class="pill">色碼 ${colorCount}</span>`;
+  rightDiv.appendChild(header);
+
+  if(!matchedGroups.length){
+    const empty = document.createElement("div");
+    empty.className = "tag";
+    empty.textContent = "沒有符合的組合包";
+    rightDiv.appendChild(empty);
+    return;
+  }
+
+  matchedGroups.forEach(g=>{
+    const box = document.createElement("div");
+    box.className = "match-group";
+    const title = document.createElement("div");
+    title.className = "match-title";
+    title.textContent = g.name;
+    const wrap = document.createElement("div");
+    wrap.className = "match-colors";
+
+    g.colors.forEach(c=>{
+      const item = document.createElement("div");
+      item.style.display = "flex";
+      item.style.alignItems = "center";
+      item.style.gap = "8px";
+
+      const sw = document.createElement("div");
+      sw.className = "similar-swatch";
+      sw.style.background = c.hex;
+      sw.addEventListener("click", ()=>showSimilar(c.hex));
+      sw.addEventListener("mousemove", e => showTooltip(e, `${c.name}\n${c.hex}\nRGB(${hexToRgb(c.hex)})`));
+      sw.addEventListener("mouseleave", hideTooltip);
+      if (c.metal) {
+        const metalTag = document.createElement("div");
+        metalTag.className = "metal";
+        metalTag.textContent = "金屬";
+        sw.appendChild(metalTag);
+      }
+
+      const label = document.createElement("div");
+      label.innerHTML = `<strong>${c.hex}</strong><br><span style="color:#666">RGB(${hexToRgb(c.hex)})</span>`;
+
+      item.appendChild(sw);
+      item.appendChild(label);
+      wrap.appendChild(item);
+    });
+
+    box.appendChild(title);
+    box.appendChild(wrap);
+    rightDiv.appendChild(box);
+  });
+}
+
+function searchColor() {
+  const valRaw = document.getElementById("colorInput").value.trim();
+  const val = valRaw.replace(/^rgb\(/i, "").replace(/\)$/,"");
+  let hex = null;
+
+  if (/^#?[0-9A-Fa-f]{6}$/.test(val)) {
+    hex = val.startsWith("#") ? val : "#" + val;
+  }
+  else if (/^\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*$/.test(val)) {
+    const [r, g, b] = val.split(",").map(x => parseInt(x, 10));
+    if ([r,g,b].every(n => Number.isInteger(n) && n>=0 && n<=255)) {
+      hex = "#" + [r, g, b].map(x => toHex(x)).join("");
+    }
+  }
+
+  if (hex) {
+    showSimilar(hex.toUpperCase());
+  } else {
+    alert("請輸入有效的 HEX 或 RGB 顏色值");
+  }
+}
+
+const tooltip = document.getElementById("tooltip");
+function showTooltip(e, text) {
+  tooltip.textContent = text;
+  tooltip.style.left = e.pageX + 10 + "px";
+  tooltip.style.top = e.pageY + 10 + "px";
+  tooltip.style.display = "block";
+}
+function hideTooltip() { tooltip.style.display = "none"; }
+</script>
+</body>
+</html>
